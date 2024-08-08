@@ -1,8 +1,10 @@
 package com.worldline.stripe.controller;
 
 import com.stripe.exception.StripeException;
-import com.worldline.stripe.PaymentService;
+import com.worldline.stripe.model.PaymentRequest;
+import com.worldline.stripe.service.PaymentService;
 import com.worldline.stripe.model.Payment;
+import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -20,10 +22,9 @@ public class PaymentController {
     }
 
     @PostMapping("/create")
-    public ResponseEntity<Payment> createPayment(@RequestBody Map<String, Object> request) {
+    public ResponseEntity<Payment> createPayment(@Valid @RequestBody PaymentRequest request) {
         try {
-            Long amount = Long.valueOf(request.get("amount").toString());
-            Payment payment = paymentService.createPayment(amount);
+            Payment payment = paymentService.createPayment(request);
             return ResponseEntity.ok(payment);
         } catch (StripeException e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();

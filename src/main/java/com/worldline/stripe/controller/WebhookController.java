@@ -5,7 +5,7 @@ import com.stripe.exception.StripeException;
 import com.stripe.model.Event;
 import com.stripe.model.PaymentIntent;
 import com.stripe.net.Webhook;
-import com.worldline.stripe.PaymentService;
+import com.worldline.stripe.service.PaymentService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -38,6 +38,10 @@ public class WebhookController {
         if ("payment_intent.succeeded".equals(event.getType()) || "payment_intent.payment_failed".equals(event.getType())) {
             PaymentIntent paymentIntent = (PaymentIntent) event.getData().getObject();
             try {
+                // Simulate webhook failure by skipping the update
+                if ("true".equals(paymentIntent.getMetadata().get("simulate_webhook_failure"))) {
+                    return ResponseEntity.ok().build();
+                }
                 paymentService.updatePaymentStatus(paymentIntent.getId());
             } catch (StripeException e) {
                 return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error updating payment status");

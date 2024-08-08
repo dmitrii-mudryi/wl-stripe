@@ -1,17 +1,15 @@
-package com.worldline.stripe;
+package com.worldline.stripe.service;
 
 import com.stripe.Stripe;
 import com.stripe.exception.StripeException;
 import com.stripe.model.PaymentIntent;
 import com.stripe.param.PaymentIntentCreateParams;
 import com.worldline.stripe.model.Payment;
+import com.worldline.stripe.model.PaymentRequest;
 import com.worldline.stripe.repository.PaymentRepository;
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-
-import java.util.List;
 
 @Service
 public class PaymentService {
@@ -30,18 +28,23 @@ public class PaymentService {
         Stripe.apiKey = stripeApiKey;
     }
 
-    public Payment createPayment(Long amount) throws StripeException {
+    public Payment createPayment(PaymentRequest request) throws StripeException {
         PaymentIntentCreateParams params =
                 PaymentIntentCreateParams.builder()
-                        .setAmount(amount)
-                        .setCurrency("usd")
+                        .setAmount(request.getAmount())
+                        .setCurrency(request.getCurrency())
+                        .setReceiptEmail(request.getEmail())
+                        .addPaymentMethodType("card")
+                        .setDescription("Payment from " + request.getName())
+                        .putMetadata("simulate_webhook_failure", String.valueOf(request.isSimulateWebhookFailure()))
                         .build();
 
         PaymentIntent paymentIntent = PaymentIntent.create(params);
 
         Payment payment = new Payment();
         payment.setPaymentId(paymentIntent.getId());
-        payment.setAmount(amount);
+        payment.setAmount(request.getAmount());
+        payment.setCurrency(request.getCurrency());
         payment.setStatus("created");
         payment.setClientSecret(paymentIntent.getClientSecret());
         paymentRepository.save(payment);
@@ -51,10 +54,11 @@ public class PaymentService {
 
     public Payment updatePaymentStatus(String paymentId) throws StripeException {
         PaymentIntent paymentIntent = PaymentIntent.retrieve(paymentId);
+
         Payment payment = paymentRepository.findByPaymentId(paymentId)
                 .orElseThrow(() -> new RuntimeException("Payment not found"));
 
-        payment.setStatus(paymentIntent.getStatus());
+        payment.setStatus(getErrorCode(paymentIntent));
         paymentRepository.save(payment);
 
         return payment;
@@ -65,15 +69,8 @@ public class PaymentService {
                 .orElseThrow(() -> new RuntimeException("Payment not found"));
     }
 
-    @Scheduled(fixedRate = 60000) // 1 minute
-    public void checkPendingPayments() {
-        List<Payment> pendingPayments = paymentRepository.findByStatus("created");
-        for (Payment payment : pendingPayments) {
-            try {
-                updatePaymentStatus(payment.getPaymentId());
-            } catch (StripeException e) {
-                e.printStackTrace(); // TODO: Log error
-            }
-        }
+    private static String getErrorCode(PaymentIntent paymentIntent) {
+        return (paymentIntent.getLastPaymentError() != null && paymentIntent.getLastPaymentError().getDeclineCode() != null) ?
+                paymentIntent.getLastPaymentError().getDeclineCode() : paymentIntent.getStatus();
     }
 }

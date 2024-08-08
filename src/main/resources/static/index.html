@@ -10,10 +10,38 @@
     <h2>Stripe Payment</h2>
     <form id="payment-form">
         <div class="form-group">
+            <label for="name">Name</label>
+            <input type="text" id="name" class="form-control" required>
+        </div>
+        <div class="form-group">
+            <label for="email">Email</label>
+            <input type="email" id="email" class="form-control" required>
+        </div>
+        <div class="form-group">
+            <label for="amount">Amount ($)</label>
+            <input type="number" step="0.01" id="amount" class="form-control" required>
+        </div>
+        <div class="form-group">
+            <label for="currency">Currency</label>
+            <select id="currency" class="form-control" required>
+                <option value="usd">USD</option>
+                <option value="eur">EUR</option>
+                <option value="gbp">GBP</option>
+                <option value="cad">CAD</option>
+                <option value="aud">AUD</option>
+                <!-- Add more currencies as needed -->
+            </select>
+        </div>
+        <div class="form-group">
             <label for="card-element">Credit or debit card</label>
             <div id="card-element" class="form-control">
-                <!-- Stripe's Elements will be inserted here. -->
+                <!-- Stripe's Element will be inserted here. -->
             </div>
+        </div>
+        <div class="form-group">
+            <label>
+                <input type="checkbox" id="simulate-webhook-failure"> Simulate webhook failure and wait 20 seconds to trigger scheduler
+            </label>
         </div>
         <button id="submit" class="btn btn-primary">Pay</button>
         <div id="payment-result" class="mt-3"></div>
@@ -30,33 +58,57 @@
 
     form.addEventListener('submit', function(event) {
         event.preventDefault();
-        // 1st step - create PaymentIntent
+        var name = document.getElementById('name').value;
+        var email = document.getElementById('email').value;
+        var amount = document.getElementById('amount').value;
+        var currency = document.getElementById('currency').value;
+        var simulateWebhookFailure = document.getElementById('simulate-webhook-failure').checked;
+
+        // 1. Init PaymentIntent
         fetch('/api/payments/create', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ amount: 1000 }) // Example amount in cents
+            body: JSON.stringify({
+                amount: Math.round(amount * 100), // Convert dollars to cents
+                currency: currency,
+                name: name,
+                email: email,
+                simulateWebhookFailure: simulateWebhookFailure
+            })
         })
             .then(response => response.json())
             .then(payment => {
-                // 2nd step - confirm card payment
+                // 2. Send payment to Stripe
                 document.getElementById('payment-result').textContent = 'Payment processing, please wait...';
                 stripe.confirmCardPayment(payment.clientSecret, {
                     payment_method: {
                         card: card,
+                        billing_details: {
+                            name: name,
+                            email: email
+                        }
                     }
                 }).then(function(result) {
                     if (result.error) {
-                        document.getElementById('payment-result').textContent = result.error.message; // Show error immediately if any
+                        const resultDiv = document.getElementById('payment-result');
+                        if (result.error.type === 'validation_error') {
+                            // Local error
+                            resultDiv.innerHTML = `<p>Error: ${result.error.message}</p>`;
+                        } else {
+                            // Stripe server error
+                            startPolling(payment.paymentId, result.error.message);
+                        }
                     } else {
-                        startPolling(payment.paymentId); // Start polling for payment status after webhook update
+                        startPolling(payment.paymentId);
                     }
+                    //startPolling(payment.paymentId, result.error ? result.error.message : null); // Start polling for payment status after webhook updates it
                 });
             });
     });
 
-    function startPolling(paymentId) {
+    function startPolling(paymentId, errorMessage) {
         const interval = setInterval(() => {
             fetch(`/api/payments/status/${paymentId}`)
                 .then(response => response.json())
@@ -64,10 +116,13 @@
                     const resultDiv = document.getElementById('payment-result');
                     resultDiv.innerHTML = `
                         <p>Payment ID: ${payment.paymentId}</p>
-                        <p>Amount: ${payment.amount}</p>
+                        <p>Amount: ${(payment.amount / 100).toFixed(2)} ${payment.currency.toUpperCase()}</p>
                         <p>Status: ${payment.status}</p>
                     `;
-                    if (payment.status === 'succeeded' || payment.status === 'failed') {
+                    if (payment.status !== 'succeeded' && errorMessage) {
+                        resultDiv.innerHTML += `<p>Reason: ${errorMessage}</p>`;
+                    }
+                    if (payment.status !== 'created') {
                         clearInterval(interval);
                     }
                 });

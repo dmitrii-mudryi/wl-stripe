@@ -16,6 +16,7 @@ public class Payment {
     private String paymentId;
     private String status;
     private Long amount;
+    private String currency;
 
     @Transient
     private String clientSecret;
