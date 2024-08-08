@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Stripe Payment</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <script src="https://js.stripe.com/v3/"></script>
+</head>
+<body>
+<div class="container mt-5">
+    <h2>Stripe Payment</h2>
+    <form id="payment-form">
+        <div class="form-group">
+            <label for="card-element">Credit or debit card</label>
+            <div id="card-element" class="form-control">
+                <!-- Stripe's Elements will be inserted here. -->
+            </div>
+        </div>
+        <button id="submit" class="btn btn-primary">Pay</button>
+        <div id="payment-result" class="mt-3"></div>
+    </form>
+</div>
+
+<script>
+    var stripe = Stripe('pk_test_51PlRjrP96l0v2l31vCM1zoT5NfSElHZ2YYSTmueaJNkA4Bas84RcKuXrDId86cPpx0ZmnXkN5tac3ZALWYwrVSW200jPzEVszU');
+    var elements = stripe.elements();
+    var card = elements.create('card');
+    card.mount('#card-element');
+
+    var form = document.getElementById('payment-form');
+
+    form.addEventListener('submit', function(event) {
+        event.preventDefault();
+        // 1st step - create PaymentIntent
+        fetch('/api/payments/create', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ amount: 1000 }) // Example amount in cents
+        })
+            .then(response => response.json())
+            .then(payment => {
+                // 2nd step - confirm card payment
+                document.getElementById('payment-result').textContent = 'Payment processing, please wait...';
+                stripe.confirmCardPayment(payment.clientSecret, {
+                    payment_method: {
+                        card: card,
+                    }
+                }).then(function(result) {
+                    if (result.error) {
+                        document.getElementById('payment-result').textContent = result.error.message; // Show error immediately if any
+                    } else {
+                        startPolling(payment.paymentId); // Start polling for payment status after webhook update
+                    }
+                });
+            });
+    });
+
+    function startPolling(paymentId) {
+        const interval = setInterval(() => {
+            fetch(`/api/payments/status/${paymentId}`)
+                .then(response => response.json())
+                .then(payment => {
+                    const resultDiv = document.getElementById('payment-result');
+                    resultDiv.innerHTML = `
+                        <p>Payment ID: ${payment.paymentId}</p>
+                        <p>Amount: ${payment.amount}</p>
+                        <p>Status: ${payment.status}</p>
+                    `;
+                    if (payment.status === 'succeeded' || payment.status === 'failed') {
+                        clearInterval(interval);
+                    }
+                });
+        }, 5000); // Poll every 5 seconds
+    }
+</script>
+</body>
+</html>
