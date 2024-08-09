@@ -18,6 +18,9 @@ import org.springframework.web.bind.annotation.*;
 public class WebhookController {
 
     private static final Logger logger = LoggerFactory.getLogger(WebhookController.class);
+    public static final String SIMULATE_WEBHOOK_FAILURE = "simulate_webhook_failure";
+    public static final String PAYMENT_INTENT_SUCCEEDED = "payment_intent.succeeded";
+    public static final String PAYMENT_INTENT_PAYMENT_FAILED = "payment_intent.payment_failed";
 
     @Value("${stripe.webhook.secret}")
     private String endpointSecret;
@@ -33,27 +36,27 @@ public class WebhookController {
                                                 @RequestHeader("Stripe-Signature") String sigHeader) {
         logger.info("Received webhook from Stripe");
 
-        Event event;
-
         try {
-            event = Webhook.constructEvent(payload, sigHeader, endpointSecret);
+            Event event = Webhook.constructEvent(payload, sigHeader, endpointSecret);
+
+            if (PAYMENT_INTENT_SUCCEEDED.equals(event.getType()) || PAYMENT_INTENT_PAYMENT_FAILED.equals(event.getType())) {
+                logger.info("Processing webhook for event type: {}", event.getType());
+                PaymentIntent paymentIntent = (PaymentIntent) event.getData().getObject();
+                try {
+                    if (Boolean.TRUE.toString().equals(paymentIntent.getMetadata().get(SIMULATE_WEBHOOK_FAILURE))) {
+                        logger.warn("Webhook simulation failure enabled, skipping update for payment intent: {}", paymentIntent.getId());
+                        return ResponseEntity.ok().build();
+                    }
+                    paymentService.updatePaymentStatus(paymentIntent.getId());
+                } catch (StripeException e) {
+                    logger.info("Error processing webhook: {}", e.getMessage(), e);
+                    return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error updating payment status");
+                }
+            } else {
+                logger.info("Ignoring webhook for event type: {}", event.getType());
+            }
         } catch (SignatureVerificationException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Invalid signature");
-        }
-
-        if ("payment_intent.succeeded".equals(event.getType()) || "payment_intent.payment_failed".equals(event.getType())) {
-            logger.info("Processing webhook for event type: {}", event.getType());
-            PaymentIntent paymentIntent = (PaymentIntent) event.getData().getObject();
-            try {
-                if (Boolean.TRUE.toString().equals(paymentIntent.getMetadata().get("simulate_webhook_failure"))) {
-                    logger.warn("Webhook simulation failure enabled, skipping update for payment intent: {}", paymentIntent.getId());
-                    return ResponseEntity.ok().build();
-                }
-                paymentService.updatePaymentStatus(paymentIntent.getId());
-            } catch (StripeException e) {
-                logger.info("Error processing webhook: {}", e.getMessage(), e);
-                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error updating payment status");
-            }
         }
 
         return ResponseEntity.ok().build();

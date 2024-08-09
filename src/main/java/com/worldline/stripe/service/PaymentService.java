@@ -81,7 +81,7 @@ public class PaymentService {
         paymentIntent.confirm(confirmParams);
     }
 
-    public Payment updatePaymentStatus(String paymentId) throws StripeException {
+    public void updatePaymentStatus(String paymentId) throws StripeException {
         logger.info("Updating payment status for paymentId: {}", paymentId);
 
         PaymentIntent paymentIntent = PaymentIntent.retrieve(paymentId);
@@ -91,8 +91,6 @@ public class PaymentService {
 
         payment.setStatus(getStatus(paymentIntent));
         paymentRepository.save(payment);
-
-        return payment;
     }
 
     public Payment getPaymentStatus(String paymentId) {
