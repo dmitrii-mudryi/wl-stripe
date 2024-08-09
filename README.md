@@ -17,8 +17,8 @@ This is a Spring Boot-based web application that integrates with Stripe to facil
 Before setting up and running the application, ensure you have the following installed:
 
 - **Java Development Kit (JDK) 17 or higher**
-- **Maven 3.6+**
-- **Stripe Account:** You need to create a Stripe account to obtain your API keys.
+- **Maven 3.6+ (included)**
+- **Stripe Account:** You need to create a Stripe account to obtain your API keys or use existing one for testing.
 - **Ngrok (Optional):** If you want to test webhooks locally, you can use Ngrok to expose your local server to the internet.
 
 ## Configuration
@@ -65,7 +65,7 @@ To run the application:
 Use Maven to build the project.
 
 ```bash
-mvn clean install
+./mvnw clean install
 ```
 
 ### Run the Application
@@ -73,7 +73,7 @@ mvn clean install
 Start the Spring Boot application using the following command:
 
 ```bash
-mvn spring-boot:run
+./mvnw spring-boot:run
 ```
 
 The application will start on the default port 8080. You can access it by navigating to `https://wl-stripe-app.ngrok.app/` in your web browser.
@@ -125,7 +125,7 @@ More cards: https://stripe.com/docs/testing
 
 ### Webhook Configuration
 
-To receive payment status updates from Stripe (e.g., payment success, failure), you need to configure a webhook in your Stripe Dashboard. Set the webhook URL to:
+To receive payment status updates from Stripe (e.g., payment success, failure), you need to configure a webhook in your Stripe Dashboard.
 You may change `https://wl-stripe-app.ngrok.app/` to your domain.
 
 ```ruby

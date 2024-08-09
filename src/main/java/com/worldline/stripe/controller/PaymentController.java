@@ -7,6 +7,7 @@ import com.worldline.stripe.model.Payment;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,6 +16,7 @@ import static com.worldline.stripe.util.PaymentUtil.getErrorPayment;
 
 @RestController
 @RequestMapping("/api/payments")
+@Validated
 public class PaymentController {
 
     private static final Logger logger = LoggerFactory.getLogger(PaymentController.class);
@@ -26,7 +28,7 @@ public class PaymentController {
     }
 
     @PostMapping("/create")
-    public ResponseEntity<Payment> createPayment(@Valid @RequestBody PaymentRequest request) {
+    public ResponseEntity<Payment> createPaymentAndConfirm(@Valid @RequestBody PaymentRequest request) {
         logger.info("Received request to create and confirm payment with payment method id {} for amount: {} {}",
                 request.getPaymentMethodId(), request.getAmount(), request.getCurrency());
 
