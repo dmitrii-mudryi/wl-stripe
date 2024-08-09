@@ -40,7 +40,7 @@
         </div>
         <div class="form-group">
             <label>
-                <input type="checkbox" id="simulate-webhook-failure"> Simulate webhook failure and wait 20 seconds to trigger scheduler
+                <input type="checkbox" id="simulate-webhook-failure"> Simulate webhook failure and wait 5-20 seconds to trigger scheduler
             </label>
         </div>
         <button id="submit" class="btn btn-primary">Pay</button>
@@ -64,48 +64,42 @@
         var currency = document.getElementById('currency').value;
         var simulateWebhookFailure = document.getElementById('simulate-webhook-failure').checked;
 
-        // 1. Init PaymentIntent
-        fetch('/api/payments/create', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                amount: Math.round(amount * 100), // Convert dollars to cents
-                currency: currency,
+        stripe.createPaymentMethod({
+            type: 'card',
+            card: card,
+            billing_details: {
                 name: name,
-                email: email,
-                simulateWebhookFailure: simulateWebhookFailure
-            })
-        })
-            .then(response => response.json())
-            .then(payment => {
-                // 2. Send payment to Stripe
+                email: email
+            }
+        }).then(function(result) {
+            if (result.error) {
+                document.getElementById('payment-result').textContent = result.error.message;
+            } else {
                 document.getElementById('payment-result').textContent = 'Payment processing, please wait...';
-                stripe.confirmCardPayment(payment.clientSecret, {
-                    payment_method: {
-                        card: card,
-                        billing_details: {
-                            name: name,
-                            email: email
-                        }
-                    }
-                }).then(function(result) {
-                    if (result.error) {
-                        const resultDiv = document.getElementById('payment-result');
-                        if (result.error.type === 'validation_error') {
-                            // Local error
-                            resultDiv.innerHTML = `<p>Error: ${result.error.message}</p>`;
+                fetch('/api/payments/create', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        paymentMethodId: result.paymentMethod.id,
+                        amount: Math.round(amount * 100), // Convert dollars to cents
+                        currency: currency,
+                        name: name,
+                        email: email,
+                        simulateWebhookFailure: simulateWebhookFailure
+                    })
+                })
+                    .then(response => response.json())
+                    .then(payment => {
+                        if (payment.error) {
+                            document.getElementById('payment-result').textContent = payment.error;
                         } else {
-                            // Stripe server error
-                            startPolling(payment.paymentId, result.error.message);
+                            startPolling(payment.paymentId, payment.errorMessage);
                         }
-                    } else {
-                        startPolling(payment.paymentId);
-                    }
-                    //startPolling(payment.paymentId, result.error ? result.error.message : null); // Start polling for payment status after webhook updates it
-                });
-            });
+                    });
+            }
+        });
     });
 
     function startPolling(paymentId, errorMessage) {
@@ -114,12 +108,16 @@
                 .then(response => response.json())
                 .then(payment => {
                     const resultDiv = document.getElementById('payment-result');
+
+                    const amount = payment.amount ? (payment.amount / 100).toFixed(2) : formAmount;
+                    const currency = payment.currency ? payment.currency.toUpperCase() : formCurrency.toUpperCase();
+
                     resultDiv.innerHTML = `
                         <p>Payment ID: ${payment.paymentId}</p>
-                        <p>Amount: ${(payment.amount / 100).toFixed(2)} ${payment.currency.toUpperCase()}</p>
+                        <p>Amount: ${amount} ${currency}</p>
                         <p>Status: ${payment.status}</p>
                     `;
-                    if (payment.status !== 'succeeded' && errorMessage) {
+                    if (payment.status !== 'succeeded' && payment.status !== 'created' && errorMessage) {
                         resultDiv.innerHTML += `<p>Reason: ${errorMessage}</p>`;
                     }
                     if (payment.status !== 'created') {

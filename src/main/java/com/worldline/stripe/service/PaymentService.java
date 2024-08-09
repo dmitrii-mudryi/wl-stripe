@@ -3,6 +3,7 @@ package com.worldline.stripe.service;
 import com.stripe.Stripe;
 import com.stripe.exception.StripeException;
 import com.stripe.model.PaymentIntent;
+import com.stripe.param.PaymentIntentConfirmParams;
 import com.stripe.param.PaymentIntentCreateParams;
 import com.worldline.stripe.model.Payment;
 import com.worldline.stripe.model.PaymentRequest;
@@ -41,15 +42,28 @@ public class PaymentService {
 
         PaymentIntent paymentIntent = PaymentIntent.create(params);
 
-        Payment payment = new Payment();
-        payment.setPaymentId(paymentIntent.getId());
-        payment.setAmount(request.getAmount());
-        payment.setCurrency(request.getCurrency());
-        payment.setStatus("created");
-        payment.setClientSecret(paymentIntent.getClientSecret());
+        Payment payment = Payment.builder()
+                .paymentId(paymentIntent.getId())
+                .amount(paymentIntent.getAmount())
+                .currency(paymentIntent.getCurrency())
+                .status("created")
+                .name(request.getName())
+                .email(request.getEmail())
+                .build();
         paymentRepository.save(payment);
 
         return payment;
+    }
+
+    public void confirmPayment(String paymentId, String paymentMethodId) throws StripeException {
+        PaymentIntent paymentIntent = PaymentIntent.retrieve(paymentId);
+
+        PaymentIntentConfirmParams confirmParams =
+                PaymentIntentConfirmParams.builder()
+                        .setPaymentMethod(paymentMethodId)
+                        .build();
+
+        paymentIntent.confirm(confirmParams);
     }
 
     public Payment updatePaymentStatus(String paymentId) throws StripeException {
@@ -58,7 +72,7 @@ public class PaymentService {
         Payment payment = paymentRepository.findByPaymentId(paymentId)
                 .orElseThrow(() -> new RuntimeException("Payment not found"));
 
-        payment.setStatus(getErrorCode(paymentIntent));
+        payment.setStatus(getStatus(paymentIntent));
         paymentRepository.save(payment);
 
         return payment;
@@ -69,8 +83,7 @@ public class PaymentService {
                 .orElseThrow(() -> new RuntimeException("Payment not found"));
     }
 
-    private static String getErrorCode(PaymentIntent paymentIntent) {
-        return (paymentIntent.getLastPaymentError() != null && paymentIntent.getLastPaymentError().getDeclineCode() != null) ?
-                paymentIntent.getLastPaymentError().getDeclineCode() : paymentIntent.getStatus();
+    private static String getStatus(PaymentIntent paymentIntent) {
+        return "succeeded".equals(paymentIntent.getStatus()) ? "succeeded" : "failed";
     }
 }

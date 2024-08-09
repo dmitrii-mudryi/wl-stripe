@@ -9,8 +9,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Map;
-
 @RestController
 @RequestMapping("/api/payments")
 public class PaymentController {
@@ -23,21 +21,42 @@ public class PaymentController {
 
     @PostMapping("/create")
     public ResponseEntity<Payment> createPayment(@Valid @RequestBody PaymentRequest request) {
+        Payment payment = new Payment();
         try {
-            Payment payment = paymentService.createPayment(request);
+            payment = paymentService.createPayment(request);
+            paymentService.confirmPayment(payment.getPaymentId(), request.getPaymentMethodId());
             return ResponseEntity.ok(payment);
         } catch (StripeException e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            Payment errorPayment = Payment.builder()
+                    .paymentId(payment.getPaymentId())
+                    .amount(request.getAmount())
+                    .status("failed")
+                    .errorMessage(e.getStripeError().getMessage())
+                    .build();
+            return new ResponseEntity<>(errorPayment, HttpStatus.BAD_REQUEST);
+        } catch (Exception e) {
+            Payment errorPayment = Payment.builder()
+                    .paymentId(payment.getPaymentId())
+                    .amount(request.getAmount())
+                    .status("failed")
+                    .errorMessage(e.getMessage())
+                    .build();
+            return new ResponseEntity<>(errorPayment, HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
     @GetMapping("/status/{paymentId}")
     public ResponseEntity<Payment> getPaymentStatus(@PathVariable String paymentId) {
+        Payment payment;
         try {
-            Payment payment = paymentService.getPaymentStatus(paymentId);
+            payment = paymentService.getPaymentStatus(paymentId);
             return ResponseEntity.ok(payment);
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            payment = Payment.builder()
+                    .status("failed")
+                    .errorMessage("An unexpected error occurred.")
+                    .build();
+            return new ResponseEntity<>(payment, HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 }

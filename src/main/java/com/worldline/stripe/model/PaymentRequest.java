@@ -6,6 +6,9 @@ import lombok.Data;
 @Data
 public class PaymentRequest {
 
+    @NotBlank(message = "Payment Method ID is required")
+    private String paymentMethodId;
+    
     @NotNull(message = "Amount is required")
     @Min(value = 50, message = "Amount should be at least 50 cents")
     private Long amount;
