@@ -9,11 +9,15 @@ import com.worldline.stripe.model.Payment;
 import com.worldline.stripe.model.PaymentRequest;
 import com.worldline.stripe.repository.PaymentRepository;
 import jakarta.annotation.PostConstruct;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 @Service
 public class PaymentService {
+
+    private static final Logger logger = LoggerFactory.getLogger(PaymentService.class);
 
     @Value("${stripe.api.key}")
     private String stripeApiKey;
@@ -30,6 +34,9 @@ public class PaymentService {
     }
 
     public Payment createPayment(PaymentRequest request) throws StripeException {
+        logger.info("Creating payment intent with payment method id {} for amount: {} {}",
+                request.getPaymentMethodId(), request.getAmount(), request.getCurrency());
+
         PaymentIntentCreateParams params =
                 PaymentIntentCreateParams.builder()
                         .setAmount(request.getAmount())
@@ -42,6 +49,9 @@ public class PaymentService {
 
         PaymentIntent paymentIntent = PaymentIntent.create(params);
 
+        logger.info("Created payment intent with payment method id {} for amount: {} {}",
+                request.getPaymentMethodId(), request.getAmount(), request.getCurrency());
+
         Payment payment = Payment.builder()
                 .paymentId(paymentIntent.getId())
                 .amount(paymentIntent.getAmount())
@@ -52,10 +62,15 @@ public class PaymentService {
                 .build();
         paymentRepository.save(payment);
 
+        logger.info("Payment id saved successfully: {} with amount: {}, currency {}", payment.getPaymentId(),
+                payment.getAmount(), payment.getCurrency());
+
         return payment;
     }
 
     public void confirmPayment(String paymentId, String paymentMethodId) throws StripeException {
+        logger.info("Confirming payment with paymentId: {}, payment method id: {}", paymentId, paymentMethodId);
+
         PaymentIntent paymentIntent = PaymentIntent.retrieve(paymentId);
 
         PaymentIntentConfirmParams confirmParams =
@@ -67,6 +82,8 @@ public class PaymentService {
     }
 
     public Payment updatePaymentStatus(String paymentId) throws StripeException {
+        logger.info("Updating payment status for paymentId: {}", paymentId);
+
         PaymentIntent paymentIntent = PaymentIntent.retrieve(paymentId);
 
         Payment payment = paymentRepository.findByPaymentId(paymentId)
@@ -79,6 +96,7 @@ public class PaymentService {
     }
 
     public Payment getPaymentStatus(String paymentId) {
+        logger.info("Getting payment status for paymentId: {}", paymentId);
         return paymentRepository.findByPaymentId(paymentId)
                 .orElseThrow(() -> new RuntimeException("Payment not found"));
     }
