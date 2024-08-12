@@ -84,7 +84,7 @@ public class PaymentService {
     public void updatePaymentStatus(String paymentId) throws StripeException {
         logger.info("Updating payment status for paymentId: {}", paymentId);
 
-        PaymentIntent paymentIntent = PaymentIntent.retrieve(paymentId);
+        PaymentIntent paymentIntent = PaymentIntent.retrieve(paymentId); //TODO: Avoid call during webhook updates, take it directly from webhook
 
         Payment payment = paymentRepository.findByPaymentId(paymentId)
                 .orElseThrow(() -> new RuntimeException("Payment not found"));
