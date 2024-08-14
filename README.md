@@ -2,6 +2,9 @@
 
 This is a Spring Boot-based web application that integrates with Stripe to facilitate card payments. The application consists of a backend server that handles payment requests and communicates with Stripe, and a frontend client that provides a simple UI for users to enter payment details.
 
+## Demo Video
+[![Watch the video](https://img.youtube.com/vi/9ij8b-z1KsA/maxresdefault.jpg)](https://youtu.be/9ij8b-z1KsA)
+
 ## Table of Contents
 
 - Prerequisites
